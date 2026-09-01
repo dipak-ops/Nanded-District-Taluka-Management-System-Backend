@@ -1,8 +1,27 @@
 from rest_framework import serializers
 from rest_framework.exceptions import PermissionDenied
 
-from records.models import Record, next_record_number
+from records.models import Record, RecordHistory, next_record_number
 from talukas.models import Taluka
+
+
+class RecordHistorySerializer(serializers.ModelSerializer):
+    changed_by_username = serializers.CharField(source="changed_by.username", read_only=True)
+    
+    class Meta:
+        model = RecordHistory
+        fields = [
+            "id",
+            "action",
+            "changed_by",
+            "changed_by_username",
+            "changed_by_role",
+            "old_value",
+            "new_value",
+            "comment",
+            "timestamp",
+        ]
+        read_only_fields = fields
 
 
 class RecordSerializer(serializers.ModelSerializer):
@@ -10,7 +29,12 @@ class RecordSerializer(serializers.ModelSerializer):
     taluka_code = serializers.CharField(source="taluka.code", read_only=True)
     created_by_username = serializers.CharField(source="created_by.username", read_only=True)
     updated_by_username = serializers.CharField(source="updated_by.username", read_only=True, default=None)
+    reviewed_by_username = serializers.CharField(source="reviewed_by.username", read_only=True, allow_null=True)
+    approved_by_username = serializers.CharField(source="approved_by.username", read_only=True, allow_null=True)
+    forwarded_by_username = serializers.CharField(source="forwarded_by.username", read_only=True, allow_null=True)
+    finalized_by_username = serializers.CharField(source="finalized_by.username", read_only=True, allow_null=True)
     taluka_id = serializers.IntegerField(write_only=True, required=False)
+    history = RecordHistorySerializer(many=True, read_only=True)
 
     class Meta:
         model = Record
@@ -32,6 +56,22 @@ class RecordSerializer(serializers.ModelSerializer):
             "deleted_at",
             "created_at",
             "updated_at",
+            # Workflow fields
+            "reviewed_by",
+            "reviewed_by_username",
+            "reviewed_at",
+            "review_comment",
+            "approved_by",
+            "approved_by_username",
+            "approved_at",
+            "forwarded_by",
+            "forwarded_by_username",
+            "forwarded_at",
+            "finalized_by",
+            "finalized_by_username",
+            "finalized_at",
+            "correction_comment",
+            "history",
         ]
         extra_kwargs = {"taluka": {"required": False}}
         read_only_fields = [
@@ -42,6 +82,15 @@ class RecordSerializer(serializers.ModelSerializer):
             "deleted_at",
             "created_at",
             "updated_at",
+            "reviewed_by",
+            "reviewed_at",
+            "approved_by",
+            "approved_at",
+            "forwarded_by",
+            "forwarded_at",
+            "finalized_by",
+            "finalized_at",
+            "history",
         ]
 
     def validate(self, attrs):
@@ -84,7 +133,8 @@ class RecordSerializer(serializers.ModelSerializer):
         validated_data["created_by"] = request.user
         validated_data["updated_by"] = request.user
         validated_data["record_number"] = next_record_number(taluka)
-        validated_data.setdefault("status", Record.Status.ACTIVE)
+        # Default to DRAFT for new records
+        validated_data.setdefault("status", Record.Status.DRAFT)
         return super().create(validated_data)
 
     def update(self, instance, validated_data):

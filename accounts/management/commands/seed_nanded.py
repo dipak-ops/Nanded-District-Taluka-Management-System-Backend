@@ -1,5 +1,6 @@
 from django.core.management.base import BaseCommand
 from django.db import transaction
+from django.utils import timezone
 
 from accounts.models import User
 from records.models import Record
@@ -107,6 +108,7 @@ class Command(BaseCommand):
                 tahsildar.is_active = True
                 tahsildar.save()
 
+            users = []
             for idx in range(1, 4):
                 username = f"{slug}.user{idx}"
                 user, u_created = User.objects.get_or_create(
@@ -129,7 +131,9 @@ class Command(BaseCommand):
                     user.taluka = taluka
                     user.is_active = True
                     user.save()
+                users.append(user)
 
+            # Create records in various workflow states
             for seq, topic in RECORD_TEMPLATES:
                 record_number = f"{code}-{seq:03d}"
                 title = f"{name} Record {seq:03d}"
@@ -137,18 +141,48 @@ class Command(BaseCommand):
                     f"Demo administrative record created for {name} Taluka "
                     f"({topic}). Record number {record_number}."
                 )
-                Record.objects.get_or_create(
+                
+                record, r_created = Record.objects.get_or_create(
                     record_number=record_number,
                     defaults={
                         "taluka": taluka,
-                        "created_by": tahsildar,
-                        "updated_by": tahsildar,
+                        "created_by": users[seq % len(users)] if users else tahsildar,
+                        "updated_by": users[seq % len(users)] if users else tahsildar,
                         "title": title,
                         "description": description,
-                        "status": Record.Status.ACTIVE,
+                        "status": Record.Status.DRAFT,
                         "is_active": True,
                     },
                 )
+                
+                # Assign workflow states to different records for testing
+                if r_created:
+                    if seq == 1:
+                        # Keep as DRAFT
+                        pass
+                    elif seq == 2:
+                        # SUBMITTED
+                        record.status = Record.Status.SUBMITTED
+                    elif seq == 3:
+                        # UNDER_REVIEW
+                        record.status = Record.Status.UNDER_REVIEW
+                        record.reviewed_by = tahsildar
+                        record.reviewed_at = timezone.now()
+                    elif seq == 4:
+                        # CORRECTION_REQUIRED
+                        record.status = Record.Status.CORRECTION_REQUIRED
+                        record.reviewed_by = tahsildar
+                        record.reviewed_at = timezone.now()
+                        record.correction_comment = "Please review and correct the data."
+                    elif seq == 5:
+                        # APPROVED
+                        record.status = Record.Status.APPROVED
+                        record.reviewed_by = tahsildar
+                        record.reviewed_at = timezone.now()
+                        record.approved_by = tahsildar
+                        record.approved_at = timezone.now()
+                    
+                    record.save()
 
         self.stdout.write(self.style.SUCCESS("Seed complete."))
         self.stdout.write(f"  Talukas: {Taluka.objects.count()}")
