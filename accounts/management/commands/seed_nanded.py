@@ -1,9 +1,11 @@
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
+from datetime import date, timedelta
+from decimal import Decimal
 
 from accounts.models import User
-from records.models import Record
+from records.models import Record, RecordMonthlyTransaction, RecordWithdrawal
 from talukas.models import Taluka
 
 TALUKAS = [
@@ -31,6 +33,14 @@ RECORD_TEMPLATES = [
     (3, "public grievance redressal"),
     (4, "disaster preparedness checklist"),
     (5, "village revenue meeting minutes"),
+]
+
+GPF_SUBSCRIBERS = [
+    ("Raj Kumar Sharma", "Raj Sharma", "2025001", "1965-03-15"),
+    ("Priya Verma", "Priya Verma", "2025002", "1970-06-22"),
+    ("Sanjay Patel", "Sanjay Patel", "2025003", "1968-11-10"),
+    ("Anita Sharma", "Anita Sharma", "2025004", "1975-02-08"),
+    ("Vijay Gopal", "Vijay Gopal", "2025005", "1972-09-14"),
 ]
 
 SUPER_ADMIN_PASSWORD = "Admin@12345"
@@ -142,6 +152,10 @@ class Command(BaseCommand):
                     f"({topic}). Record number {record_number}."
                 )
                 
+                # Get GPF subscriber details (cycle through the list)
+                gpf_subscriber = GPF_SUBSCRIBERS[seq % len(GPF_SUBSCRIBERS)]
+                subscriber_name, employee_name, gpf_account_number, dob_str = gpf_subscriber
+                
                 record, r_created = Record.objects.get_or_create(
                     record_number=record_number,
                     defaults={
@@ -152,6 +166,23 @@ class Command(BaseCommand):
                         "description": description,
                         "status": Record.Status.DRAFT,
                         "is_active": True,
+                        # GPF Fields
+                        "subscriber_name": subscriber_name,
+                        "employee_name": employee_name,
+                        "gpf_account_number": gpf_account_number,
+                        "date_of_birth": dob_str,
+                        "ddo_name": f"{name} DDO Office",
+                        "ddo_code": code,
+                        "department": "Revenue",
+                        "treasury": "District Treasury",
+                        "financial_year": "2025-2026",
+                        "interest_rate": Decimal("10.50"),
+                        "opening_balance": Decimal("150000.00"),
+                        "total_deposit": Decimal("50000.00"),
+                        "total_withdrawal": Decimal("10000.00"),
+                        "interest_amount": Decimal("15750.00"),
+                        "closing_balance": Decimal("205750.00"),
+                        "amount_in_words": "Two lakh five thousand seven hundred fifty rupees only",
                     },
                 )
                 
@@ -183,6 +214,33 @@ class Command(BaseCommand):
                         record.approved_at = timezone.now()
                     
                     record.save()
+                    
+                    # Create sample monthly transactions for April to September
+                    months = ["04/2025", "05/2025", "06/2025", "07/2025", "08/2025", "09/2025"]
+                    for idx, month in enumerate(months):
+                        RecordMonthlyTransaction.objects.get_or_create(
+                            record=record,
+                            month=month,
+                            defaults={
+                                "subscription": Decimal("8000.00") + (Decimal(idx * 100)),
+                                "refund_of_withdrawals": Decimal("0.00") if idx % 2 == 0 else Decimal("500.00"),
+                                "other_credit": Decimal("250.00") if idx % 3 == 0 else Decimal("0.00"),
+                            },
+                        )
+                    
+                    # Create sample withdrawal records
+                    if seq in [2, 3, 5]:
+                        withdrawal_date = timezone.now().date() - timedelta(days=30)
+                        RecordWithdrawal.objects.get_or_create(
+                            record=record,
+                            withdrawal_amount=Decimal("10000.00"),
+                            withdrawal_date=withdrawal_date,
+                            defaults={
+                                "withdrawal_type": "Regular",
+                                "withdrawal_voucher_no": f"{code}-WD-{seq:03d}",
+                                "remarks": "Regular withdrawal request",
+                            },
+                        )
 
         self.stdout.write(self.style.SUCCESS("Seed complete."))
         self.stdout.write(f"  Talukas: {Taluka.objects.count()}")
@@ -193,4 +251,6 @@ class Command(BaseCommand):
             f"  Taluka users: {User.objects.filter(role=User.Role.TALUKA_USER).count()}"
         )
         self.stdout.write(f"  Records: {Record.objects.count()}")
+        self.stdout.write(f"  Monthly Transactions: {RecordMonthlyTransaction.objects.count()}")
+        self.stdout.write(f"  Withdrawals: {RecordWithdrawal.objects.count()}")
         self.stdout.write(self.style.WARNING("DEMO passwords are for development only. Change them in production."))

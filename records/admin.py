@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from records.models import Record, RecordHistory
+from records.models import Record, RecordHistory, RecordMonthlyTransaction, RecordWithdrawal
 
 
 @admin.register(RecordHistory)
@@ -18,17 +18,32 @@ class RecordHistoryAdmin(admin.ModelAdmin):
     readonly_fields = ("record", "changed_by", "action", "timestamp")
 
 
+class RecordMonthlyTransactionInline(admin.TabularInline):
+    model = RecordMonthlyTransaction
+    extra = 1
+    fields = ("month", "subscription", "refund_of_withdrawals", "other_credit", "total_credit")
+    readonly_fields = ("total_credit",)
+
+
+class RecordWithdrawalInline(admin.TabularInline):
+    model = RecordWithdrawal
+    extra = 1
+    fields = ("withdrawal_amount", "withdrawal_type", "withdrawal_voucher_no", "withdrawal_date", "remarks")
+
+
 @admin.register(Record)
 class RecordAdmin(admin.ModelAdmin):
     list_display = (
         "record_number",
+        "subscriber_name",
+        "gpf_account_number",
         "title",
         "taluka",
+        "financial_year",
         "status",
         "created_by",
         "reviewed_by",
         "approved_by",
-        "forwarded_by",
         "finalized_by",
         "created_at",
         "updated_at",
@@ -36,6 +51,7 @@ class RecordAdmin(admin.ModelAdmin):
     list_filter = (
         "taluka",
         "status",
+        "financial_year",
         "is_active",
         "created_at",
     )
@@ -43,6 +59,8 @@ class RecordAdmin(admin.ModelAdmin):
         "record_number",
         "title",
         "description",
+        "subscriber_name",
+        "gpf_account_number",
         "created_by__username",
     )
     readonly_fields = (
@@ -53,6 +71,8 @@ class RecordAdmin(admin.ModelAdmin):
         "approved_at",
         "forwarded_at",
         "finalized_at",
+        "closing_balance",
+        "amount_in_words",
     )
     fieldsets = (
         ("Record Information", {
@@ -63,6 +83,32 @@ class RecordAdmin(admin.ModelAdmin):
                 "description",
                 "status",
             )
+        }),
+        ("GPF/Employee Details", {
+            "fields": (
+                "subscriber_name",
+                "employee_name",
+                "gpf_account_number",
+                "date_of_birth",
+                "ddo_name",
+                "ddo_code",
+                "department",
+                "treasury",
+            ),
+            "classes": ("collapse",)
+        }),
+        ("Financial Information", {
+            "fields": (
+                "financial_year",
+                "interest_rate",
+                "opening_balance",
+                "total_deposit",
+                "total_withdrawal",
+                "interest_amount",
+                "closing_balance",
+                "amount_in_words",
+            ),
+            "classes": ("collapse",)
         }),
         ("Content & Audit", {
             "fields": (
@@ -105,6 +151,7 @@ class RecordAdmin(admin.ModelAdmin):
             "classes": ("collapse",)
         }),
     )
+    inlines = [RecordMonthlyTransactionInline, RecordWithdrawalInline]
     raw_id_fields = (
         "created_by",
         "updated_by",

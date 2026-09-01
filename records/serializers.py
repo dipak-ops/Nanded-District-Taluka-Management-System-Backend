@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from rest_framework.exceptions import PermissionDenied
 
-from records.models import Record, RecordHistory, next_record_number
+from records.models import Record, RecordHistory, RecordMonthlyTransaction, RecordWithdrawal, next_record_number
 from talukas.models import Taluka
 
 
@@ -24,6 +24,38 @@ class RecordHistorySerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class RecordMonthlyTransactionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RecordMonthlyTransaction
+        fields = [
+            "id",
+            "month",
+            "subscription",
+            "refund_of_withdrawals",
+            "other_credit",
+            "total_credit",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["total_credit", "created_at", "updated_at"]
+
+
+class RecordWithdrawalSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RecordWithdrawal
+        fields = [
+            "id",
+            "withdrawal_amount",
+            "withdrawal_type",
+            "withdrawal_voucher_no",
+            "withdrawal_date",
+            "remarks",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["created_at", "updated_at"]
+
+
 class RecordSerializer(serializers.ModelSerializer):
     taluka_name = serializers.CharField(source="taluka.name", read_only=True)
     taluka_code = serializers.CharField(source="taluka.code", read_only=True)
@@ -35,6 +67,8 @@ class RecordSerializer(serializers.ModelSerializer):
     finalized_by_username = serializers.CharField(source="finalized_by.username", read_only=True, allow_null=True)
     taluka_id = serializers.IntegerField(write_only=True, required=False)
     history = RecordHistorySerializer(many=True, read_only=True)
+    monthly_transactions = RecordMonthlyTransactionSerializer(many=True, read_only=True)
+    withdrawals = RecordWithdrawalSerializer(many=True, read_only=True)
 
     class Meta:
         model = Record
@@ -71,7 +105,29 @@ class RecordSerializer(serializers.ModelSerializer):
             "finalized_by_username",
             "finalized_at",
             "correction_comment",
+            # GPF/Employee Details
+            "subscriber_name",
+            "employee_name",
+            "gpf_account_number",
+            "date_of_birth",
+            "ddo_name",
+            "ddo_code",
+            "department",
+            "treasury",
+            # Financial Details
+            "financial_year",
+            "interest_rate",
+            # Balance Summary
+            "opening_balance",
+            "total_deposit",
+            "total_withdrawal",
+            "interest_amount",
+            "closing_balance",
+            "amount_in_words",
+            # Related data
             "history",
+            "monthly_transactions",
+            "withdrawals",
         ]
         extra_kwargs = {"taluka": {"required": False}}
         read_only_fields = [
@@ -91,6 +147,8 @@ class RecordSerializer(serializers.ModelSerializer):
             "finalized_by",
             "finalized_at",
             "history",
+            "monthly_transactions",
+            "withdrawals",
         ]
 
     def validate(self, attrs):
