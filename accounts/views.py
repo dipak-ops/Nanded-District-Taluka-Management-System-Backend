@@ -13,6 +13,7 @@ from accounts.models import User
 from accounts.permissions import IsSuperAdmin, IsSuperAdminOrTahsildar
 from accounts.serializers import (
     ChangePasswordSerializer,
+    ProfileSerializer,
     ResetPasswordSerializer,
     TahsildarSerializer,
     UserSerializer,
@@ -72,7 +73,7 @@ class MeView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        return Response(UserSerializer(request.user, context={"request": request}).data)
+        return Response(ProfileSerializer(request.user).data)
 
 
 class ChangePasswordView(APIView):

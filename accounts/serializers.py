@@ -169,3 +169,54 @@ class ResetPasswordSerializer(serializers.Serializer):
     def validate_new_password(self, value):
         validate_password(value)
         return value
+
+
+class ProfileSerializer(serializers.Serializer):
+    """Serializer for /auth/me/ endpoint with permissions."""
+    id = serializers.IntegerField()
+    username = serializers.CharField()
+    role = serializers.CharField()
+    taluka = serializers.SerializerMethodField()
+    permissions = serializers.SerializerMethodField()
+
+    def get_taluka(self, obj):
+        if obj.taluka:
+            return {
+                "id": obj.taluka.id,
+                "name": obj.taluka.name,
+                "code": obj.taluka.code,
+            }
+        return None
+
+    def get_permissions(self, obj):
+        """Return role-based permissions."""
+        permissions = []
+
+        if obj.is_taluka_user:
+            permissions = [
+                "view_own_records",
+                "create_record",
+                "edit_draft",
+                "submit_record",
+                "edit_correction_required",
+            ]
+        elif obj.is_tahsildar:
+            permissions = [
+                "view_taluka_records",
+                "review_records",
+                "approve_records",
+                "request_correction",
+                "forward_approved_records",
+                "view_taluka_users",
+            ]
+        elif obj.is_super_admin:
+            permissions = [
+                "view_all_talukas",
+                "view_all_records",
+                "manage_users",
+                "manage_tahsildars",
+                "finalize_records",
+                "view_audit_logs",
+            ]
+
+        return permissions

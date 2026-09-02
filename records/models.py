@@ -84,6 +84,28 @@ class Record(models.Model):
     
     correction_comment = models.TextField(blank=True)
     
+    # GPF/Employee Details
+    subscriber_name = models.CharField(max_length=255, blank=True)
+    employee_name = models.CharField(max_length=255, blank=True)
+    gpf_account_number = models.CharField(max_length=50, blank=True, db_index=True)
+    date_of_birth = models.DateField(null=True, blank=True)
+    ddo_name = models.CharField(max_length=255, blank=True)
+    ddo_code = models.CharField(max_length=50, blank=True)
+    department = models.CharField(max_length=255, blank=True)
+    treasury = models.CharField(max_length=255, blank=True)
+    
+    # Financial Details
+    financial_year = models.CharField(max_length=9, blank=True, db_index=True)
+    interest_rate = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    
+    # Balance Summary
+    opening_balance = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    total_deposit = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    total_withdrawal = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    interest_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    closing_balance = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    amount_in_words = models.CharField(max_length=512, blank=True)
+    
     class Meta:
         ordering = ["taluka__code", "record_number"]
         indexes = [
@@ -175,3 +197,67 @@ class RecordHistory(models.Model):
 
     def __str__(self):
         return f"{self.record.record_number} - {self.action} at {self.timestamp}"
+
+
+class RecordMonthlyTransaction(models.Model):
+    class Month(models.TextChoices):
+        APRIL = "04", "April"
+        MAY = "05", "May"
+        JUNE = "06", "June"
+        JULY = "07", "July"
+        AUGUST = "08", "August"
+        SEPTEMBER = "09", "September"
+        OCTOBER = "10", "October"
+        NOVEMBER = "11", "November"
+        DECEMBER = "12", "December"
+        JANUARY = "01", "January"
+        FEBRUARY = "02", "February"
+        MARCH = "03", "March"
+
+    record = models.ForeignKey(
+        Record,
+        on_delete=models.CASCADE,
+        related_name="monthly_transactions",
+    )
+    month = models.CharField(max_length=7, blank=True, help_text="MM/YYYY format")
+    subscription = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    refund_of_withdrawals = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    other_credit = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    total_credit = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("record", "month")
+        ordering = ["record", "month"]
+        indexes = [
+            models.Index(fields=["record", "month"]),
+        ]
+
+    def save(self, *args, **kwargs):
+        self.total_credit = self.subscription + self.refund_of_withdrawals + self.other_credit
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.record.record_number} - {self.month}"
+
+
+class RecordWithdrawal(models.Model):
+    record = models.ForeignKey(
+        Record,
+        on_delete=models.CASCADE,
+        related_name="withdrawals",
+    )
+    withdrawal_amount = models.DecimalField(max_digits=15, decimal_places=2)
+    withdrawal_type = models.CharField(max_length=100, blank=True)
+    withdrawal_voucher_no = models.CharField(max_length=50, blank=True)
+    withdrawal_date = models.DateField(null=True, blank=True)
+    remarks = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-withdrawal_date", "-created_at"]
+
+    def __str__(self):
+        return f"{self.record.record_number} - Withdrawal {self.withdrawal_voucher_no}"
